@@ -17,3 +17,5 @@ https://www.wemos.cc/en/latest/d1/d1_mini_3.1.0.html
 https://www.wemos.cc/en/latest/d1_mini_shield/tft_1_4.html
 
 https://www.wemos.cc/en/latest/d1_mini_shield/protoboard.html
+
+![This is an image](https://github.com/TheMetalHead/Esp_Graph/blob/master/d1_mini_v3.1.0_1_16x16.jpg)
