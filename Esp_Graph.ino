@@ -614,6 +614,7 @@ void setup() {
 		// Do nothing.
 	}
 
+	Serial.println();
 	Serial.println( F( "Initialising." ) );
 
 	TFTscreen.initR( INITR_144GREENTAB );
