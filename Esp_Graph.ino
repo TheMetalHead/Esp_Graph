@@ -2,6 +2,9 @@
 
  This reads the value of an analogue pin, and graphs the values on the screen.
 
+ The maximum input voltage is 3.3 volts and has no proper overvoltage protection. It should
+ withstand a brief connection to 13.8 volts as it has a 220K ohm series input resistor.
+
  Lifted from: http://www.arduino.cc/en/Tutorial/TFTGraph
 
  Created 15 April 2013 by Scott Fitzgerald.
@@ -9,6 +12,17 @@
  This example code is in the public domain.
 
  Modified by TheMetalHead to use a Wemos D1 Mini and a TFT 1.4" shield.
+
+
+
+ Usage:
+	Pressing the 'buttonFilled' button toggles between displaying draw or filled.
+
+	Pressing the 'buttonTimebase' button:
+
+		Single press = Display the current timebase.
+		Double press = Increment the timebase by 10mS up to _D_MAX_TIMEBASE.
+		Long press   = Reset the timebase to '_D_DEFAULT_TIMEBASE'.
 
  */
 
@@ -36,6 +50,8 @@
 	// ADC1_CH6 (GPIO 34)
 	// ADC1_CH7 (GPIO 35)
 
+	// These are not tested.
+
 	#define	_D_TFT_RST		( 15 )
 	#define	_D_TFT_CS		( 14 )
 	#define	_D_TFT_DC		( 32 )
@@ -45,9 +61,13 @@
 	#define	_D_A2D_MAX_BITS		( 4095 )
 	#define	_D_A2D_OFFSET		( 9 )
 
+	#define	_D_MAX_INPUT_VOLTAGE	( 3300 )
+
 #else
 
 	// Wemos D1 Mini
+	//
+	// https://www.wemos.cc/en/latest/d1/d1_mini_3.1.0.html
 	//
 	// D0 	IO			GPIO16		Voltage selection, 3v3 on start up
 	// D1 	IO, SCL			GPIO5		btn_1
@@ -58,6 +78,9 @@
 	// D6 	IO, MISO 		GPIO12		SPI
 	// D7 	IO, MOSI	 	GPIO13		SPI
 	// D8 	IO, 10k Pull-down, SS	GPIO15		_D_TFT_CS
+
+	// The ADC input channel has a 10 bit resolution. This means that you can get analogue
+	// readings ranging from 0 to 1023, in which 0 corresponds to 0V and 1023 to 3.3V
 
 	#define	_D_TFT_RST		( -1 )			// For TFT I2C Connector Shield V1.0.0 and TFT 1.4 Shield V1.0.0   Not used
 	#define	_D_TFT_CS		( 15 )			// For TFT I2C Connector Shield V1.0.0 and TFT 1.4 Shield V1.0.0   D8
@@ -75,6 +98,9 @@
 
 
 // 1.44” diagonal LCD TFT display.
+//
+// https://www.wemos.cc/en/latest/d1_mini_shield/tft_1_4.html
+//
 // 128 x 128 resolution, 18-bit (262,144) colour.
 // Driver IC: ST7735S.
 //
@@ -91,6 +117,7 @@ Adafruit_ST7735		TFTscreen = Adafruit_ST7735( _D_TFT_CS, _D_TFT_DC, _D_TFT_RST )
 
 
 // Available colours.
+//
 //	ST7735_BLACK
 //	ST7735_WHITE
 //	ST7735_RED
@@ -103,34 +130,65 @@ Adafruit_ST7735		TFTscreen = Adafruit_ST7735( _D_TFT_CS, _D_TFT_DC, _D_TFT_RST )
 
 
 
-#define	_D_SERIAL_SPEED			( 115200 )
+/*******************************************************************/
+// Configure as required.
 
 // Uncomment to display 'ui16_A2d_Smoothed' and 'ui16_Reading_In_Mv'.
+//
 //#define	_D_DEBUG_VALUES			( 1 )
 
+// Comment out if no buttons are used.
+//
+#define	_D_ENABLE_BUTTONS		( 1 )
+
+/*******************************************************************/
+
+
+
+#define	_D_SERIAL_SPEED			( 115200 )
+
 // The oscilloscope timebase in mS.
-#define	_D_DEFAULT_TIMEBASE		( 20 )			// 20 * ST7735_TFTHEIGHT_128 = 2,560mS
-#define	_D_MAX_TIMEBASE			( 40 )			// 640mS to 5,120mS
+//
+#define	_D_DEFAULT_TIMEBASE		( 40 )			// 40 * ST7735_TFTHEIGHT_128 = 5,120mS
+#define	_D_MAX_TIMEBASE			( 70 )			// Maximum timebase. (Multiple of 10mS):
+								//   10mS = 1.28 seconds per screen width
+								//   20mS = 1.56 seconds
+								//   30mS = 3.84 seconds
+								//   40mS = 5.12 seconds
+								//   50mS = 6.4 seconds
+								//   60mS = 7.68 seconds
+								//   70mS = 8.96 seconds
 
 // The displayed voltage position.
+//
 #define	_D_VOLTAGE_X_POS		( 5 )
 #define	_D_VOLTAGE_Y_POS		( 5 )
 
 #define	_D_TIMEBASE_X_POS		( 50 )
 #define	_D_TIMEBASE_Y_POS		( 5 )
 
+#define	_D_SCREENTIME_X_POS		( 45 + _D_TIMEBASE_X_POS )
+#define	_D_SCREENTIME_Y_POS		( _D_TIMEBASE_Y_POS )
+
 // The font size.
+//
 #define	_D_FONT_HEIGHT			( 7 )
 #define	_D_FONT_WIDTH			( 5 )
 
 // The colours.
+//
 #define	_D_BACKGROUND_COLOUR		( ST7735_BLACK )
 #define	_D_FOREGROUND_COLOUR		( ST7735_GREEN )
 
 #define	_D_GRID_COLOUR			( ST7735_BLUE )
 #define	_D_OSCILLOSCOPE_COLOUR		( ST7735_YELLOW )
 
+
+
+#ifdef	_D_ENABLE_BUTTONS
+
 // The Buttons.
+//
 const	int	button_Timebase_Pin = 5;			// D1
 const	int	button_Filled_Pin = 4;				// D2
 
@@ -138,6 +196,10 @@ const	int	button_Filled_Pin = 4;				// D2
 
 ClickButton	buttonTimebase( button_Timebase_Pin, HIGH );
 ClickButton	buttonFilled(   button_Filled_Pin,   HIGH );
+
+#endif
+
+
 
 #ifdef	_D_DEBUG_VALUES
 
@@ -168,43 +230,66 @@ uint32_t	ui32_A2d_Total;
 
 static	void	_Write_Char( const char _cc_chr ) {
 	// We need an extra blank pixel line around the character being written.
+
 	TFTscreen.drawFastHLine( TFTscreen.getCursorX(), TFTscreen.getCursorY(), 2 + _D_FONT_WIDTH,  _D_BACKGROUND_COLOUR );
 	TFTscreen.drawFastVLine( TFTscreen.getCursorX(), TFTscreen.getCursorY(), 2 + _D_FONT_HEIGHT, _D_BACKGROUND_COLOUR );
 
 	// Display the character after the blank pixel line.
+
 	TFTscreen.setCursor( 1 + TFTscreen.getCursorX(), 1 + TFTscreen.getCursorY() );
 
 	TFTscreen.setTextColor( _D_FOREGROUND_COLOUR, _D_BACKGROUND_COLOUR );
 	TFTscreen.write( _cc_chr );
 
 	// Calculate and set the new cursor position.
+
 	TFTscreen.setCursor( TFTscreen.getCursorX() - 1, TFTscreen.getCursorY() - 1 );
 }
 
 
 
-static	void	_Write_Char( uint8_t _ui8_val ) {
+static	void	_Write_Digit( uint8_t _ui8_val ) {
 	_Write_Char( ( const char ) ( '0' + _ui8_val ) );
 }
 
+
+
+static	void	_Write_Decimal_Point() {
+	_Write_Char( '.' );
+}
+
+
+
+static	void	_Write_Null_Character() {
+	_Write_Char( '\0' );
+}
 
 
 static	void	_Clear_Screen() {
 ///	TFTscreen.fillScreen( _D_BACKGROUND_COLOUR );
 
 	// Only clear the lower part of the display.
+
 	TFTscreen.fillRect( 1, ST7735_TFTHEIGHT_128 - 1 - ui16_Max_Height, ST7735_TFTWIDTH_128 - 2, ui16_Max_Height, _D_BACKGROUND_COLOUR );
 
-	// Clear the timebase if it was displayed and is now not required.
+	// Clear the timebase and screen time if it was displayed and is now not required.
+
 	if ( 0 == ui8_Timebase_Display_Count ) {
 		TFTscreen.setCursor( _D_TIMEBASE_X_POS, _D_TIMEBASE_Y_POS );
-		_Write_Char( '\0' );
-		_Write_Char( '\0' );
-		_Write_Char( '\0' );
-		_Write_Char( '\0' );
+		_Write_Null_Character();
+		_Write_Null_Character();
+		_Write_Null_Character();
+		_Write_Null_Character();
+
+		TFTscreen.setCursor( _D_SCREENTIME_X_POS, _D_SCREENTIME_Y_POS );
+		_Write_Null_Character();
+		_Write_Null_Character();
+		_Write_Null_Character();
+		_Write_Null_Character();
 	}
 
-	// Draw the grid.
+	// Draw the grid every 500mV.
+
 	uint16_t	_ui16_Y_Pos;
 
 
@@ -214,9 +299,8 @@ static	void	_Clear_Screen() {
 		TFTscreen.drawFastHLine( 1, ST7735_TFTHEIGHT_128 - _ui16_Y_Pos, ST7735_TFTWIDTH_128 - 2, _D_GRID_COLOUR );
 	}
 
-///	TFTscreen.drawRect( 0, 0, ST7735_TFTWIDTH_128, ST7735_TFTHEIGHT_128, _D_OSCILLOSCOPE_COLOUR );
-
 	// Reset some variables.
+
 	ui16_Max_Height = 0;
 
 	i16_Scope_X_Pos = 0;
@@ -250,22 +334,21 @@ static	void	_Write_String_At_XY( uint8_t _ui8_x, uint8_t _ui8_y, const char *_cc
 static	void	_Display_Voltage( uint16_t _ui16_val ) {
 	TFTscreen.setCursor( _D_VOLTAGE_X_POS, _D_VOLTAGE_Y_POS );
 
-	_Write_Char( ( uint8_t ) ( _ui16_val / 1000 ) );	// Write the units digit
+	_Write_Digit( ( uint8_t ) ( _ui16_val / 1000 ) );	// Write the units digit
 
 	_ui16_val %= 1000;
 
-	// Write a decimal point.
-	_Write_Char( '.' );
+	_Write_Decimal_Point();
 
-	_Write_Char( ( uint8_t ) ( _ui16_val / 100 ) );		// Write the tenths digit
+	_Write_Digit( ( uint8_t ) ( _ui16_val / 100 ) );	// Write the tenths digit
 
 	_ui16_val %= 100;
 
-	_Write_Char( ( uint8_t ) ( _ui16_val / 10 ) );		// Write the hundredths digit
+	_Write_Digit( ( uint8_t ) ( _ui16_val / 10 ) );		// Write the hundredths digit
 
 	_ui16_val %= 10;
 
-	_Write_Char( ( uint8_t ) ( _ui16_val ) );		// Write the thousandths digit
+	_Write_Digit( ( uint8_t ) ( _ui16_val ) );		// Write the thousandths digit
 
 	_Write_Char( 'v' );
 }
@@ -273,19 +356,19 @@ static	void	_Display_Voltage( uint16_t _ui16_val ) {
 
 
 static	void	_Display_Value( uint16_t _ui16_val ) {
-	_Write_Char( ( uint8_t ) ( _ui16_val / 1000 ) );
+	_Write_Digit( ( uint8_t ) ( _ui16_val / 1000 ) );
 
 	_ui16_val %= 1000;
 
-	_Write_Char( ( uint8_t ) ( _ui16_val / 100 ) );
+	_Write_Digit( ( uint8_t ) ( _ui16_val / 100 ) );
 
 	_ui16_val %= 100;
 
-	_Write_Char( ( uint8_t ) ( _ui16_val / 10 ) );
+	_Write_Digit( ( uint8_t ) ( _ui16_val / 10 ) );
 
 	_ui16_val %= 10;
 
-	_Write_Char( ( uint8_t ) ( _ui16_val ) );
+	_Write_Digit( ( uint8_t ) ( _ui16_val ) );
 }
 
 
@@ -294,14 +377,38 @@ static	void	_Display_Timebase() {
 	TFTscreen.setCursor( _D_TIMEBASE_X_POS, _D_TIMEBASE_Y_POS );
 
 	if ( ui8_Timebase > 9 ) {
-		_Write_Char( ( uint8_t ) ( ui8_Timebase / 10 ) );	// Write the tenths digit
+		_Write_Digit( ( uint8_t ) ( ui8_Timebase / 10 ) );	// Write the tenths digit
 	} else {
-		_Write_Char( '\0' );
+		_Write_Null_Character();
 	}
 
-	_Write_Char( ( uint8_t ) ( ui8_Timebase % 10 ) );		// Write the units digit
+	_Write_Digit( ( uint8_t ) ( ui8_Timebase % 10 ) );		// Write the units digit
 
 	_Write_String( "mS" );
+
+
+#ifndef	_D_DEBUG_VALUES
+
+	uint16_t	_u16_Screen_time;
+
+
+	_u16_Screen_time = ST7735_TFTHEIGHT_128 * ui8_Timebase;		// Calculate the screen refresh time
+
+	TFTscreen.setCursor( _D_SCREENTIME_X_POS, _D_SCREENTIME_Y_POS );
+
+	_Write_Digit( ( uint8_t ) ( _u16_Screen_time / 1000 ) );	// Write the units digit
+
+	_u16_Screen_time %= 1000;
+
+	_Write_Decimal_Point();
+
+	_Write_Digit( ( uint8_t ) ( _u16_Screen_time / 100 ) );		// Write the tenths digit
+
+	_u16_Screen_time %= 100;
+
+	_Write_Digit( ( uint8_t ) ( _u16_Screen_time / 10 ) );		// Write the hundredths digit
+
+#endif
 }
 
 
@@ -314,6 +421,8 @@ static	void	_Enable_Display_Timebase() {
 
 
 
+#ifdef	_D_ENABLE_BUTTONS
+
 static	void	_Button_Display_Timebase() {
 	if ( 1 == buttonTimebase.clicks ) {			// If we need to display the timebase
 		_Enable_Display_Timebase();
@@ -324,10 +433,10 @@ static	void	_Button_Display_Timebase() {
 
 static	void	_Button_Change_Timebase() {
 	if ( 2 == buttonTimebase.clicks ) {			// If we need to change the timebase
-		ui8_Timebase += 5;
+		ui8_Timebase += 10;
 
 		if ( ui8_Timebase > _D_MAX_TIMEBASE ) {
-			ui8_Timebase = 5;
+			ui8_Timebase = 10;
 		}
 
 		_Enable_Display_Timebase();
@@ -364,13 +473,18 @@ static	void	_Button_Toggle_Draw_Filled() {
 	}
 }
 
+#endif
 
+
+
+// This is the A2D sample loop.
 
 static	void	_Grab_Sample_Input() {
 	if ( str_Millis_Sample > 1 ) {				// Sample the analogue pin every 1mS
 		str_Millis_Sample = 0;
 
 		// Read the A2D and average it.
+
 		ui32_A2d_Total += analogRead( _D_A2D_INPUT );
 
 		uint8_t	_ui8_samples = ui8_Timebase / 3;
@@ -396,7 +510,8 @@ static	void	_Grab_Sample_Input() {
 
 
 
-// This is the oscilloscope loop.
+// This is the oscilloscope display loop.
+
 static	void	_Display_Oscilloscope() {
 	if ( str_Millis_Timebase > ui8_Timebase ) {
 		str_Millis_Timebase = 0;
@@ -404,6 +519,7 @@ static	void	_Display_Oscilloscope() {
 		_Display_Voltage( ui16_Reading_In_Mv );
 
 		// Map it to the screen height.
+
 		uint16_t	_ui16_Draw_Height = map( ui16_Reading_In_Mv, 0, _D_MAX_INPUT_VOLTAGE + 1, 0, ST7735_TFTHEIGHT_128 );
 
 // There's also the mathematical way of doing it using slope-intercept form: y = mx + b where the slope (m) is
@@ -419,9 +535,11 @@ static	void	_Display_Oscilloscope() {
 
 		if ( b_Draw_Filled ) {
 			// Draw the filled line.
+
 			TFTscreen.drawFastVLine( i16_Scope_X_Pos, ST7735_TFTHEIGHT_128 - _ui16_Draw_Height, _ui16_Draw_Height, _D_OSCILLOSCOPE_COLOUR );
 		} else {
 			// Draw as an oscilloscope would.
+
 			TFTscreen.drawLine( i16_Scope_Last_X_Pos, ST7735_TFTHEIGHT_128 - ui16_Last_Draw_Height, i16_Scope_X_Pos, ST7735_TFTHEIGHT_128 - _ui16_Draw_Height, _D_OSCILLOSCOPE_COLOUR );
 
 			ui16_Last_Draw_Height = _ui16_Draw_Height;
@@ -433,6 +551,7 @@ static	void	_Display_Oscilloscope() {
 		}
 
 		// If the graph has reached the screen edge erase the screen and start again.
+
 		if ( ST7735_TFTWIDTH_128 <= ++i16_Scope_X_Pos ) {
 			_Clear_Screen();
 
@@ -441,6 +560,7 @@ static	void	_Display_Oscilloscope() {
 			}
 
 			// If the timebase needs to be displayed.
+
 			if ( ui8_Timebase_Display_Count ) {
 				_Display_Timebase();
 			}
@@ -452,11 +572,13 @@ static	void	_Display_Oscilloscope() {
 
 void setup() {
 	// Initialise the serial port.
+
 	Serial.begin( _D_SERIAL_SPEED );
 
 	delay( 500 );
 
 	// While the serial stream is not open, do nothing.
+
 	while ( ! Serial ) {
 		// Do nothing.
 	}
@@ -468,6 +590,7 @@ void setup() {
 	// SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here
 	// Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
 	// may end up with a black screen some times, or all the time.
+
 	//TFTscreen.setSPISpeed( 40000000 );
 
 	//TFTscreen.setTextWrap( false );			// Allow text to run off right edge
@@ -479,6 +602,8 @@ void setup() {
 	ui16_Max_Height = ST7735_TFTHEIGHT_128 - 2;
 
 	_Clear_Screen();
+
+	// Draw the oscilloscope outline.
 
 	TFTscreen.drawRect( 0, 0, ST7735_TFTWIDTH_128, ST7735_TFTHEIGHT_128, _D_OSCILLOSCOPE_COLOUR );
 
@@ -500,30 +625,25 @@ void setup() {
 
 
 void loop() {
+#ifdef	_D_ENABLE_BUTTONS
+
 	// ESD sanity.
+
 	pinMode( button_Timebase_Pin, INPUT );
 	pinMode( button_Filled_Pin,   INPUT );
 
 	// Update the button states.
+
 	buttonTimebase.Update();
 	buttonFilled.Update();
-
-#if 0
-
-Serial.print( F( "Button 1 = " ) );
-Serial.println( digitalRead( button_Timebase_Pin ) );
-
-Serial.print( F( "Button 2 = " ) );
-Serial.println( digitalRead( button_Filled_Pin ) );
-
-Serial.println();
-
-#endif
 
 	_Button_Display_Timebase();
 	_Button_Change_Timebase();
 	_Button_Reset_Timebase();
 	_Button_Toggle_Draw_Filled();
+
+#endif
+
 	_Grab_Sample_Input();
 	_Display_Oscilloscope();
 
