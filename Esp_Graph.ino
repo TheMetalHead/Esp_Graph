@@ -137,9 +137,13 @@ Adafruit_ST7735		TFTscreen = Adafruit_ST7735( _D_TFT_CS, _D_TFT_DC, _D_TFT_RST )
 //
 //#define	_D_DEBUG_VALUES			( 1 )
 
-// Comment out if no buttons are used.
+// Uncomment if the timebase and filled buttons are used.
 //
 #define	_D_ENABLE_BUTTONS		( 1 )
+
+// Comment out if display Y axis labels..
+//
+#define	_D_ENABLE_Y_AXIS_LABELS		( 1 )
 
 /*******************************************************************/
 
@@ -162,10 +166,10 @@ Adafruit_ST7735		TFTscreen = Adafruit_ST7735( _D_TFT_CS, _D_TFT_DC, _D_TFT_RST )
 // The displayed voltage position.
 //
 #define	_D_VOLTAGE_X_POS		( 5 )
-#define	_D_VOLTAGE_Y_POS		( 5 )
+#define	_D_VOLTAGE_Y_POS		( 7 )
 
-#define	_D_TIMEBASE_X_POS		( 50 )
-#define	_D_TIMEBASE_Y_POS		( 5 )
+#define	_D_TIMEBASE_X_POS		( 55 )
+#define	_D_TIMEBASE_Y_POS		( 7 )
 
 #define	_D_SCREENTIME_X_POS		( 45 + _D_TIMEBASE_X_POS )
 #define	_D_SCREENTIME_Y_POS		( _D_TIMEBASE_Y_POS )
@@ -297,6 +301,28 @@ static	void	_Clear_Screen() {
 		_ui16_Y_Pos = map( i16_Scope_X_Pos, 0, _D_MAX_INPUT_VOLTAGE + 1, 0, ST7735_TFTHEIGHT_128 );
 
 		TFTscreen.drawFastHLine( 1, ST7735_TFTHEIGHT_128 - _ui16_Y_Pos, ST7735_TFTWIDTH_128 - 2, _D_GRID_COLOUR );
+
+#ifdef	_D_ENABLE_Y_AXIS_LABELS
+
+		TFTscreen.setCursor( 112, ST7735_TFTHEIGHT_128 - 5 - _ui16_Y_Pos );
+
+		if ( 1000 == i16_Scope_X_Pos ) {
+			_Write_Char( '1' );
+			_Write_Char( 'v' );
+		} else if ( 2000 == i16_Scope_X_Pos ) {
+			_Write_Char( '2' );
+			_Write_Char( 'v' );
+		} else if ( 3000 == i16_Scope_X_Pos ) {
+			// If the timebase is not being displayed.
+
+			if ( 0 == ui8_Timebase_Display_Count ) {
+				_Write_Char( '3' );
+				_Write_Char( 'v' );
+			}
+		}
+
+#endif
+
 	}
 
 	// Reset some variables.
@@ -413,9 +439,14 @@ static	void	_Display_Timebase() {
 
 
 
-static	void	_Enable_Display_Timebase() {
+static	void	_Reset_Display_Timebase() {
 	ui8_Timebase_Display_Count = 3;
+}
 
+
+
+static	void	_Enable_Display_Timebase() {
+	_Reset_Display_Timebase();
 	_Display_Timebase();
 }
 
@@ -601,6 +632,7 @@ void setup() {
 
 	ui16_Max_Height = ST7735_TFTHEIGHT_128 - 2;
 
+	_Reset_Display_Timebase();				// Must come before '_Clear_Screen()'
 	_Clear_Screen();
 
 	// Draw the oscilloscope outline.
